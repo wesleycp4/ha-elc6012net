@@ -1,3 +1,7 @@
+## 1.1.3-p164 (fork)
+
+- Status: aceita resposta de 164 bytes (alguns ELC respondem sem o último byte; o original exigia 165). Build local, sem imagem do GHCR.
+
 # Changelog
 
 ## 1.1.3

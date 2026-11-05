@@ -68,6 +68,7 @@ PARTITION_FENCE = 255         # alarme + choque (o que o arm/disarm aciona)
 PARTITION_ALARM = 1           # só alarme  (estado: [31].0)
 PARTITION_SHOCK = 2           # só choque  (estado: [30].0) — botão de choque do app
 STATUS_LEN = 165              # resposta do 0x0B4A (e do arme/desarme)
+STATUS_LEN_MIN = 164          # alguns firmwares respondem 164 B (sem o último byte)
 NUM_ZONES = 8                 # o app lê só o byte [46] de zonas (ReadFenceStatus)
 MAX_FRAME = 1024              # limite de sanidade para o campo de tamanho
 
@@ -324,7 +325,7 @@ class ElcCloudSession:
 
     def status(self) -> dict:
         resp = self._xchg(packet_fence(CMD_FENCE_STATUS), timeout=20.0)
-        if len(resp) < STATUS_LEN or self._echo(resp) != CMD_FENCE_STATUS:
+        if len(resp) < STATUS_LEN_MIN or self._echo(resp) != CMD_FENCE_STATUS:
             raise RuntimeError(f"resposta de status inválida ({len(resp)} B): {resp.hex(' ')}")
         return parse_fence_status(resp)
 
@@ -405,7 +406,7 @@ class ElcCloudSession:
         if echo == NACK:
             code = resp[8] if len(resp) > 9 else -1
             raise PanelRefused(f"comando recusado pelo painel (NACK, código {code})")
-        if echo == CMD_FENCE_STATUS and len(resp) >= STATUS_LEN:
+        if echo == CMD_FENCE_STATUS and len(resp) >= STATUS_LEN_MIN:
             return parse_fence_status(resp)
         if not resp:
             # Nem o comando nem o status de confirmação responderam.
