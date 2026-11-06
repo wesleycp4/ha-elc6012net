@@ -150,7 +150,9 @@ já é o total. Diferenças observadas:
 - `[163]` traz o RSSI em complemento de dois (`0xD4 0xD3 0xD7 0xCE` = -44, -45,
   -41, -50 dBm), em vez do módulo positivo (`0x3F` = 63 dBm) do painel original.
   Lido sem tratamento dava sempre 0% — o próprio app Guardian mostra
-  "Sinal Wi-Fi 0%" nesse painel, ou seja, o app tem o mesmo problema.
+  "Sinal Wi-Fi 0%" nesse painel, ou seja, o app tem o mesmo problema. Logo
+  após o módulo reconectar ao Wi-Fi o app mostra "100%" por alguns segundos:
+  `[163]` vem `0` (RSSI ainda não medido, `<=37`) até a primeira medição.
 - `[152]` acompanha o dia do mês (`05`→`06` na virada), como `[72]`.
 
 Quem lê `len + 1` fica esperando o 165º byte até o timeout do comando (20 s no
