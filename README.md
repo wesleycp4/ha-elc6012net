@@ -1,5 +1,23 @@
 # Integração Home Assistant — Intelbras ELC 6012 NET
 
+> **Este é um fork de [rhacius/ha-elc6012net](https://github.com/rhacius/ha-elc6012net).**
+> Diferenças em relação ao original:
+>
+> - O add-on **compila localmente** no Home Assistant a partir deste código
+>   (sem a chave `image:` no `config.yaml`), em vez de baixar uma imagem pronta
+>   do GHCR. Nada roda aqui que não esteja neste repositório.
+> - Correções enviadas ao original como PR (branch `status-sem-checksum`):
+>   suporte ao firmware que responde o status com 164 bytes sem checksum
+>   (placa base 1.1.0 / módulo 1.2.11), RSSI com sinal, e consultas sem a
+>   espera de 20 s — ver `CHANGELOG` 1.1.4 e `PROTOCOLO` §4.1.
+> - `PROTOCOLO` §1.2 documenta o hardware do módulo NET (ESP-WROOM-02D).
+>
+> Instalação: adicione `https://github.com/wesleycp4/ha-elc6012net` à loja de
+> add-ons (o primeiro `install` compila a imagem, ~1–2 min). Para atualizar a
+> partir do original: `git fetch upstream && git merge upstream/master`, revise
+> o diff, suba a `version` em `elc6012_mqtt/config.yaml` e use "Procurar
+> atualizações" na loja.
+
 Ponte entre o eletrificador **ELC 6012 NET** e o Home Assistant via
 **MQTT com auto-descoberta** (não requer componente custom).
 
@@ -26,8 +44,10 @@ elc6012_ha_mqtt.py ──TCP 9009──> nuvem Intelbras (relay amt8000) ──>
 [![Adicionar repositório ao Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Frhacius%2Fha-elc6012net)
 
 1. Configurações → Add-ons → Loja → ⋮ → **Repositórios** → adicione
-   `https://github.com/rhacius/ha-elc6012net` (ou use o botão acima).
-2. Instale o add-on **ELC 6012 NET** (imagem pronta para `aarch64` e `amd64`).
+   `https://github.com/wesleycp4/ha-elc6012net` (o botão acima aponta para o
+   repositório original, com imagem pronta).
+2. Instale o add-on **ELC 6012 NET** (neste fork a imagem é compilada
+   localmente para `aarch64` e `amd64`).
 3. Na aba **Configuração**, informe o `mac` do ELC (mostrado no app Guardian, ou
    pelo `probe` da seção 1) e a `password` do app Guardian.
 4. Inicie. O dispositivo aparece na integração **MQTT** (requer o add-on
