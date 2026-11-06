@@ -132,7 +132,7 @@ dispositivo (ex.: `alarm_control_panel.elc_6012_net_cerca_eletrica`):
 - **`binary_sensor.disparo`** — qualquer zona disparada (o disparo do choque
   chega pelo `event.cerca_eletrica`, abaixo)
 - **`binary_sensor.choque_na_cerca`** — alta tensão ativa
-- **`sensor.sinal_elc`** — nível de sinal (%)
+- **`sensor.sinal_elc`** — nível de sinal Wi-Fi do ELC (%)
 - **`sensor.ultimo_evento_cerca`** — último evento do painel (ex.: "Desarme remoto ·
   choque"), com data, hora, partição e zona/usuário nos atributos
 - **`event.cerca_eletrica`** — dispara a cada evento novo do painel, com tipo

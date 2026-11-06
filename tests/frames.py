@@ -88,3 +88,17 @@ EVENTOS_PAG7 = bytes.fromhex(
     "00 00 1b 0a 1a 09 1b 18 01 04 01 0a 00 00 00 00 00 1b 0a 1a 09 1b 14 01 04 0a 07 00 02 00 "
     "00 00 1b 0a 1a 09 1b 07 6b "
 )
+
+# Status de 164 bytes, SEM checksum, de outro ELC 6012 NET (firmware diferente;
+# capturado em 06/nov/2026). Alarme desarmado, choque ligado, zonas em 0 mesmo com
+# uma janela (zona sem fio) aberta — o painel desarmado não reporta sensor sem
+# fio. [163] = RSSI com sinal: 0xCE = -50 dBm (74%). MAC trocado pelo fictício;
+# não há checksum a recalcular.
+STATUS_SEM_CHECKSUM = bytes.fromhex(
+        "00 01 00 00 00 a4 0b 4a 35 01 01 00 10 00 00 ff 03 00 00 00 ff 00 00 00 00 00 00 00 00 00 "
+        "81 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+        "00 00 00 00 00 00 00 00 00 00 00 00 06 0b 1a 0f 16 2d 00 00 00 00 00 00 00 00 00 00 00 00 "
+        "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+        "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+        "00 00 06 01 02 0b 00 00 1a 3f 12 34 56 ce "
+)

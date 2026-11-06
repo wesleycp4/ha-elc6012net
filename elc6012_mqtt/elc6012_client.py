@@ -67,8 +67,9 @@ NACK = 0xF0FD                 # NACK (erro) — payload[0] = código
 PARTITION_FENCE = 255         # alarme + choque (o que o arm/disarm aciona)
 PARTITION_ALARM = 1           # só alarme  (estado: [31].0)
 PARTITION_SHOCK = 2           # só choque  (estado: [30].0) — botão de choque do app
-STATUS_LEN = 165              # resposta do 0x0B4A (e do arme/desarme)
-STATUS_LEN_MIN = 164          # alguns firmwares respondem 164 B (sem o último byte)
+STATUS_LEN = 165              # resposta do 0x0B4A (e do arme/desarme) com checksum
+STATUS_LEN_SEM_CHK = 164      # idem em firmwares que não mandam o checksum (§4.1)
+STATUS_TAIL_TIMEOUT = 1.0     # espera pelo checksum depois dos 164 bytes do status
 NUM_ZONES = 8                 # o app lê só o byte [46] de zonas (ReadFenceStatus)
 MAX_FRAME = 1024              # limite de sanidade para o campo de tamanho
 
@@ -170,7 +171,10 @@ class ElcCloudSession:
         tamanho len (BE em [4..5]), cuja regra depende do eco ([6..7]):
           - ACK/login/NACK: total = 4 (prefixo) + 2 (len) + len + 1 (checksum),
             com len incluindo os 2 bytes do comando;
-          - status 0x0B4A: total = len + 1 (len=0xA4 em frames de 165 bytes);
+          - status 0x0B4A: total = len + 1 (len=0xA4 em frames de 165 bytes),
+            ou só len em firmwares que não mandam o checksum: lê len bytes
+            e espera o último por STATUS_TAIL_TIMEOUT, em vez de até o
+            timeout do comando (20 s a cada consulta nesses painéis);
           - eventos 0x3900: sempre 129 bytes (o len vem 0x82 — não confere).
         Lê só esses bytes — um frame seguinte fica no socket em vez de se
         misturar a este. Em timeout, devolve o que chegou (os chamadores
@@ -198,13 +202,24 @@ class ElcCloudSession:
                 ln = int.from_bytes(buf[4:6], "big")
                 echo = self._echo(buf)
                 if echo == CMD_FENCE_STATUS:
-                    need = ln + 1
+                    need = ln          # + checksum, se o firmware mandar (abaixo)
                 elif echo == CMD_EVENTS:
                     need = EVENT_FRAME   # o len (0x82) não bate com o tamanho real
                 else:
                     need = ln + 7
                 if need > MAX_FRAME:
                     raise ConnectionError(f"frame com tamanho inválido ({need} B): {buf.hex(' ')}")
+        if len(buf) == need and self._echo(buf) == CMD_FENCE_STATUS:
+            # Alguns firmwares mandam o status sem o checksum (164 bytes). Espera
+            # pouco pelo 165º byte; sem ele, aceita o frame pela estrutura.
+            self.sock.settimeout(STATUS_TAIL_TIMEOUT)
+            try:
+                buf += self.sock.recv(1)
+            except socket.timeout:
+                if not self._status_sem_checksum_ok(buf):
+                    raise ConnectionError(f"status sem checksum com estrutura inválida: {buf.hex(' ')}")
+                self._log("status de 164 B (firmware sem checksum)")
+                return buf
         if len(buf) == need and checksum(buf[:-1]) != buf[-1] and self._echo(buf) == NACK:
             # O relay não conta o código de erro no len do NACK: o que parecia o
             # checksum é o código ([8]) e o checksum real vem em seguida.
@@ -233,6 +248,11 @@ class ElcCloudSession:
             pass
         finally:
             self.sock.setblocking(True)
+
+    def _status_sem_checksum_ok(self, resp: bytes) -> bool:
+        """Frame de status sem checksum: confere eco, modelo e o MAC do painel."""
+        return (len(resp) == STATUS_LEN_SEM_CHK and self._echo(resp) == CMD_FENCE_STATUS
+                and resp[8] == 0x35 and resp[157:163] == self.mac_hex)
 
     @staticmethod
     def _echo(resp: bytes) -> int:
@@ -325,7 +345,7 @@ class ElcCloudSession:
 
     def status(self) -> dict:
         resp = self._xchg(packet_fence(CMD_FENCE_STATUS), timeout=20.0)
-        if len(resp) < STATUS_LEN_MIN or self._echo(resp) != CMD_FENCE_STATUS:
+        if len(resp) < STATUS_LEN_SEM_CHK or self._echo(resp) != CMD_FENCE_STATUS:
             raise RuntimeError(f"resposta de status inválida ({len(resp)} B): {resp.hex(' ')}")
         return parse_fence_status(resp)
 
@@ -406,7 +426,7 @@ class ElcCloudSession:
         if echo == NACK:
             code = resp[8] if len(resp) > 9 else -1
             raise PanelRefused(f"comando recusado pelo painel (NACK, código {code})")
-        if echo == CMD_FENCE_STATUS and len(resp) >= STATUS_LEN_MIN:
+        if echo == CMD_FENCE_STATUS and len(resp) >= STATUS_LEN_SEM_CHK:
             return parse_fence_status(resp)
         if not resp:
             # Nem o comando nem o status de confirmação responderam.
@@ -565,8 +585,10 @@ def parse_fence_status(resp: bytes) -> dict:
       [54..55] bitmask de zonas disparadas
       [62..63] bitmask de zonas em bypass
       [72..77] dia, mês, ano, hora, min, seg (relógio do painel)
-      [163]    sinal (<=37 -> 100%; senão 174-2*v)
-      [164]    checksum
+      [163]    sinal: |RSSI| em dBm (<=37 -> 100%; senão 174-2*v). Alguns
+               firmwares mandam o RSSI com sinal (ex.: 0xD4 = -44 dBm) e sem o
+               checksum — o frame tem 164 bytes.
+      [164]    checksum (quando presente)
     """
     def bit(b: int, n: int) -> bool:
         return bool(resp[b] & (1 << n)) if len(resp) > b else False
@@ -575,6 +597,8 @@ def parse_fence_status(resp: bytes) -> dict:
         return (resp[off] | (resp[off + 1] << 8)) if len(resp) >= off + 2 else 0
 
     sig = resp[163] if len(resp) > 163 else None
+    if sig is not None and sig > 127:
+        sig = 256 - sig            # RSSI em complemento de dois: -44 dBm -> 44
     dt = None
     if len(resp) > 77 and 1 <= resp[72] <= 31 and 1 <= resp[73] <= 12:
         dt = {"dia": resp[72], "mes": resp[73], "ano": resp[74],
