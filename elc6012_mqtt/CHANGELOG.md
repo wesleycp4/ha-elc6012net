@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.4
+
+- **Suporte a ELC que respondem o status com 164 bytes (sem checksum):** o
+  add-on rejeitava a resposta ("resposta de status inválida") e não funcionava
+  nesses painéis. Agora aceita os dois formatos, validando o frame sem checksum
+  pela estrutura (eco, modelo e MAC do painel).
+- **Consultas mais rápidas nesses painéis:** o cliente esperava o byte de
+  checksum até o timeout (20 s por status, 15 s por comando). Agora espera só
+  1 s por ele.
+- **Sinal correto nesses painéis:** o RSSI vem com sinal (ex.: -44 dBm) e era
+  lido como 0%.
+
 ## 1.1.3
 
 - **Menos quedas da ponte:** quando a sessão com a nuvem Intelbras morre em

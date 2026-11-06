@@ -78,7 +78,8 @@ chk = XOR de todos os bytes anteriores; chk ^= 0xFF
 byte 0..3 : prefixo do relay (00 00 00 00 / 00 01 00 00 — varia; ignorar)
 byte 4..5 : len BE   (ACK/login: total = len + 7; NACK: len + 8, ver abaixo;
                      status 0x0B4A: total = len + 1, ex.: len=0xA4 em frames de
-                     165 bytes; eventos 0x3900: sempre 129 bytes, §6.1)
+                     165 bytes — ou só len (164) em firmwares sem checksum, §4.1;
+                     eventos 0x3900: sempre 129 bytes, §6.1)
 byte 6..7 : eco do comando (ou F0FE=ACK de bind, F0FD=NACK/erro)
 byte 8..  : payload (no NACK: [8] = código de erro)
 último    : checksum
@@ -135,8 +136,30 @@ Resposta de 165 bytes (offsets incluem os 4 bytes de prefixo do relay):
 | `[79]` bit0 | alimentação: 1 = bateria (`ACTIVE_BATTERY`), 0 = rede AC (`AC_POWER_OK`) — da decompilação, não validado |
 | `[145]` bits 0/1 | PGM 1 / PGM 2 ligada — da decompilação, não validado |
 | `[157..162]` | MAC do ELC (validado) |
-| `[163]` | sinal: `<=37 -> 100%`; senão `174 - 2*v` % |
-| `[164]` | checksum |
+| `[163]` | sinal: `|RSSI|` em dBm; `<=37 -> 100%`; senão `174 - 2*v` %. Em firmwares sem checksum (§4.1) vem o RSSI **com sinal** (`0xD4` = -44 dBm) |
+| `[164]` | checksum (ausente em alguns firmwares, §4.1) |
+
+### 4.1 Variante sem checksum (164 bytes)
+
+Outro ELC 6012 NET (06/nov/2026, firmware diferente) responde ao `0x0B4A` — e ao
+`0x401E`/`0x401F` — com **164 bytes**: o mesmo layout de `[0..163]`, **sem o byte
+de checksum**. O campo `len` vem igual (`0xA4` = 164), ou seja, nele o `len`
+já é o total. Diferenças observadas:
+
+- `[163]` traz o RSSI em complemento de dois (`0xD4 0xD3 0xD7 0xCE` = -44, -45,
+  -41, -50 dBm), em vez do módulo positivo (`0x3F` = 63 dBm) do painel original.
+  Lido sem tratamento dava sempre 0%.
+- `[152]` acompanha o dia do mês (`05`→`06` na virada), como `[72]`.
+
+Quem lê `len + 1` fica esperando o 165º byte até o timeout do comando (20 s no
+status, 15 s nos comandos) a cada consulta. O cliente agora lê `len` bytes e
+espera o checksum só por `STATUS_TAIL_TIMEOUT` (1 s); sem ele, valida o frame
+pela estrutura (eco `0B4A`, modelo `0x35` em `[8]`, MAC da sessão em
+`[157..162]`). Com o 165º byte presente, o checksum continua obrigatório.
+
+Nesse painel, desarmado, uma zona **sem fio** aberta não altera `[46..47]`: o
+sensor avisa a abertura pelo rádio, mas o painel só a registra como disparo
+quando armado. A zona 1 (com fio) não foi testada.
 
 ## 5. Arme / desarme (comando 0x401E)
 
@@ -237,6 +260,7 @@ Validado: arme/desarme remoto aparecem como `34A7`/`14A7` com a partição certa
 | Bind appID / MAC (amt8000) | ✅ `F0FE` |
 | Login 0xF0F0 (senha do app) | ✅ `F0F0`, erro 0 |
 | Status 0x0B4A | ✅ 165 bytes, checksum OK |
+| Status 0x0B4A em outro ELC (06/nov/2026) | ✅ 164 bytes, **sem checksum**, RSSI com sinal — §4.1 |
 | Desarme `0x401E [255,0]` | ✅ status com `[30]=0x80` (choque OFF) |
 | Arme `0x401E [255,1]` | ✅ status com `[30]=0x81` (choque ON) |
 | Alarme desarmado com choque ativo (pelo app, 27/out/2026) | ✅ `[30]=0x81 [31]=0x80` — choque e alarme são independentes; `[14]` foi `01` nessa leitura, mas `00` em outras com o mesmo estado — não indica o alarme |

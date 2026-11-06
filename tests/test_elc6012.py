@@ -13,7 +13,7 @@ import unittest.mock
 import elc6012_client as c
 
 from .frames import (EVENTOS_PAG0, EVENTOS_PAG7, FRAMES, NACK_LOGIN, NACK_LOGIN_TRUNCADO,
-                     PROBE_MAC, PROBE_MODELO)
+                     PROBE_MAC, PROBE_MODELO, STATUS_SEM_CHECKSUM)
 
 try:
     import elc6012_ha_mqtt as bridge_mod
@@ -34,9 +34,10 @@ class FakeSocket:
         self.responses = list(responses)
         self.sent = []
         self.buf = b""
+        self.timeouts = []
 
     def settimeout(self, t):
-        pass
+        self.timeouts.append(t)
 
     def setblocking(self, flag):
         pass
@@ -113,6 +114,26 @@ class TestParseStatus(unittest.TestCase):
     def test_mac_no_status(self):
         self.assertEqual(FRAMES["armado"][157:163].hex().upper(), MAC)
 
+    def test_frame_sem_checksum(self):
+        # Firmware que manda 164 bytes: sem checksum e com o RSSI com sinal.
+        self.assertEqual(len(STATUS_SEM_CHECKSUM), c.STATUS_LEN_SEM_CHK)
+        st = c.parse_fence_status(STATUS_SEM_CHECKSUM)
+        self.assertFalse(st["armado"])
+        self.assertTrue(st["choque"])
+        self.assertFalse(st["sistema_armado"])
+        self.assertEqual(st["zonas_abertas"], [])
+        self.assertEqual(st["zonas_bypass"], [])
+        self.assertEqual(st["data_hora"], {"dia": 6, "mes": 11, "ano": 26,
+                                           "hora": 15, "min": 22, "seg": 45})
+        self.assertEqual(st["sinal_pct"], 74)   # 0xCE = -50 dBm, não 206
+
+    def test_sinal_com_sinal_negativo(self):
+        for raw, pct in ((0xD4, 86), (0xCE, 74), (0x3F, 48), (0x25, 100), (0xA9, 0)):
+            with self.subTest(hex(raw)):
+                frame = bytearray(STATUS_SEM_CHECKSUM)
+                frame[163] = raw
+                self.assertEqual(c.parse_fence_status(bytes(frame))["sinal_pct"], pct)
+
 
 # ---------------------------------------------------------------------------
 # Enquadramento e validação de entrada
@@ -178,6 +199,30 @@ class TestXchg(unittest.TestCase):
     def test_checksum_invalido(self):
         with self.assertRaisesRegex(ConnectionError, "checksum"):
             session(FRAMES["armado"][:-1] + b"\x00")._xchg(b"x")
+
+    def test_status_sem_checksum(self):
+        # 164 bytes e mais nada: aceita pela estrutura (eco, modelo, MAC) sem
+        # esperar o timeout do comando — só STATUS_TAIL_TIMEOUT pelo 165º byte.
+        s = session(STATUS_SEM_CHECKSUM, STATUS_SEM_CHECKSUM)
+        self.assertEqual(s._xchg(b"x", timeout=20.0), STATUS_SEM_CHECKSUM)
+        self.assertEqual(s.sock.timeouts[-1], c.STATUS_TAIL_TIMEOUT)
+        self.assertEqual(s.status()["sinal_pct"], 74)
+
+    def test_status_sem_checksum_de_outro_painel(self):
+        outro = bytearray(STATUS_SEM_CHECKSUM)
+        outro[157:163] = bytes.fromhex("00 1A 3F 65 43 21")
+        with self.assertRaisesRegex(ConnectionError, "estrutura inválida"):
+            session(bytes(outro))._xchg(b"x")
+
+    def test_status_com_checksum_continua_lendo_o_checksum(self):
+        # O 165º byte chega: frame completo, checksum conferido, nada sobra.
+        s = session(FRAMES["armado"])
+        self.assertEqual(s._xchg(b"x"), FRAMES["armado"])
+        self.assertEqual(s.sock.buf, b"")
+
+    def test_comando_com_status_sem_checksum(self):
+        st = session(STATUS_SEM_CHECKSUM).set_shock(True)
+        self.assertTrue(st["choque"])
 
     def test_descarta_resposta_atrasada(self):
         # Sobra de uma resposta anterior não pode virar a resposta do comando.
