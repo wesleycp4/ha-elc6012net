@@ -90,6 +90,13 @@ O `status` imprime os campos interpretados; os comandos já retornam o novo
 estado confirmado pelo painel (`-v` mostra os frames brutos). `arm`/`disarm`
 acionam alarme **e** choque; `shock-*` e `alarm-*` mexem só em um deles.
 
+> **Windows:** os dois `.py` da raiz são links simbólicos; se o Git não os
+> criou (erro `NameError: name 'elc6012_mqtt' is not defined`), rode direto
+> `python elc6012_mqtt\elc6012_client.py ...`, ou habilite links com
+> `git config core.symlinks true` e `git checkout -- elc6012_client.py
+> elc6012_ha_mqtt.py` (requer o modo Desenvolvedor do Windows). No PowerShell a
+> variável é `$env:ELC_PASSWORD = "SUASENHA"`.
+
 > Com a ponte ou o add-on rodando, o CLI recebe NACK 50 (uma sessão por
 > painel) — pare-os antes.
 
@@ -126,7 +133,10 @@ dispositivo (ex.: `alarm_control_panel.elc_6012_net_cerca_eletrica`):
   desligado). ARMAR/DESARMAR aqui aciona alarme **e** choque juntos (partição 255).
 - **`switch.choque`** — liga/desliga **só o choque** (o alarme não muda), como o
   botão de choque do app Guardian
-- **`binary_sensor.zona_1..8`** — zonas abertas (device_class `opening`; o ELC tem 8 zonas)
+- **`binary_sensor.zona_1..8`** — zonas abertas (device_class `opening`; o ELC tem 8 zonas).
+  A zona 1 é com fio; as 2 a 8 são sem fio e, **com o alarme desarmado, o painel
+  não as reporta abertas** (o sensor avisa pelo rádio, o painel só registra como
+  disparo quando armado) — ver `PROTOCOLO` §4.1
 - **`switch.bypass_zona_1..8`** — anula/reativa a zona (bypass). Só com o alarme
   desarmado: com ele armado o comando é recusado e o switch volta ao estado real
 - **`binary_sensor.disparo`** — qualquer zona disparada (o disparo do choque
@@ -330,7 +340,8 @@ actions:
 2. `amt8000.intelbras.com.br:9009`: bind appID `0x30F6` → `F0FE`; bind MAC `0xFFF0` → `F0FE`;
 3. login `0xF0F0` `[01, senha6, 10 00]` (senha: 1 dígito = 1 byte hex) → erro 0;
 4. status `0x0B4A` (marker `00 00 8F FF`) → 165 B (`[30].0`=choque, `[31].0`=alarme,
-   `[62]`=zonas em bypass);
+   `[62]`=zonas em bypass; alguns firmwares respondem 164 B, sem checksum —
+   `PROTOCOLO` §4.1);
 5. arme/desarme `0x401E` `[partição, modo]` (modo 1/0; partição 255 = alarme + choque,
    1 = só alarme, 2 = só choque) → novo status;
 6. bypass `0x401F` `[255, z1..z8]` (1 byte por zona; define todas de uma vez) → novo status;
@@ -361,3 +372,6 @@ ponte exigem o `paho-mqtt` (sem ele são pulados).
 | Ponte OFF com NACK 50 no log | o app Guardian (ou o CLI) pegou a sessão | feche o app/CLI; a ponte reconecta sozinha |
 | Tudo "unavailable" | ponte parada ou sem sessão (`binary_sensor.ponte_elc` OFF) | ver o log do add-on; após NACK 50 a ponte tenta de novo com backoff (até 10 min) |
 | App Guardian: "central desconectada" | a ponte está com a sessão | esperado — use o HA, ou pare a ponte |
+| `resposta de status inválida (164 B)` | firmware que responde sem checksum (placa 1.1.0 / módulo 1.2.11) | versão ≥ 1.1.4 aceita; antes disso cada consulta ainda esperava 20 s pelo byte que não vinha |
+| `sensor.sinal_elc` em 0% (e o Guardian também mostra "Sinal Wi-Fi 0%") | mesmo firmware: RSSI com sinal em `[163]` | corrigido na 1.1.4 (o app Guardian continua mostrando 0%) |
+| Janela/porta aberta não muda `binary_sensor.zona_N` | zona sem fio com o alarme desarmado | comportamento do painel; arme o alarme para a abertura virar `disparo` |
