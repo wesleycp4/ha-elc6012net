@@ -141,14 +141,16 @@ Resposta de 165 bytes (offsets incluem os 4 bytes de prefixo do relay):
 
 ### 4.1 Variante sem checksum (164 bytes)
 
-Outro ELC 6012 NET (06/nov/2026, firmware diferente) responde ao `0x0B4A` — e ao
+Outro ELC 6012 NET (06/nov/2026; placa base **1.1.0**, módulo Wi-Fi **1.2.11**,
+como o app Guardian mostra em "Sobre") responde ao `0x0B4A` — e ao
 `0x401E`/`0x401F` — com **164 bytes**: o mesmo layout de `[0..163]`, **sem o byte
 de checksum**. O campo `len` vem igual (`0xA4` = 164), ou seja, nele o `len`
 já é o total. Diferenças observadas:
 
 - `[163]` traz o RSSI em complemento de dois (`0xD4 0xD3 0xD7 0xCE` = -44, -45,
   -41, -50 dBm), em vez do módulo positivo (`0x3F` = 63 dBm) do painel original.
-  Lido sem tratamento dava sempre 0%.
+  Lido sem tratamento dava sempre 0% — o próprio app Guardian mostra
+  "Sinal Wi-Fi 0%" nesse painel, ou seja, o app tem o mesmo problema.
 - `[152]` acompanha o dia do mês (`05`→`06` na virada), como `[72]`.
 
 Quem lê `len + 1` fica esperando o 165º byte até o timeout do comando (20 s no
