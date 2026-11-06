@@ -9,8 +9,9 @@
 - **Consultas mais rápidas nesses painéis:** o cliente esperava o byte de
   checksum até o timeout (20 s por status, 15 s por comando). Agora espera só
   1 s por ele.
-- **Sinal correto nesses painéis:** o RSSI vem com sinal (ex.: -44 dBm) e era
-  lido como 0%.
+- **Sinal nesses painéis:** `[163]` era lido como 0%; agora é interpretado como
+  RSSI com sinal (ex.: `0xD4` = -44 dBm → 86%). Interpretação consistente com
+  as capturas, não confirmada por medição independente.
 
 ## 1.1.3
 

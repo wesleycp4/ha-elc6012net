@@ -44,23 +44,34 @@ sessão, o relay pode levar alguns segundos para liberar o painel.
 
 ### 1.2 Hardware do módulo de rede (painel de 06/nov/2026, §4.1)
 
-Informação de referência para quem quiser ir além do protocolo (sniffar a
-serial, trocar o firmware do módulo). Observado numa unidade com placa base
-**1.1.0** e módulo **1.2.11** (versões como o app Guardian mostra em "Sobre"):
+Referência para quem quiser ir além do protocolo da nuvem. Separado em **observado**
+(numa unidade com placa base **1.1.0** e módulo **1.2.11**, versões como o app
+Guardian mostra em "Sobre") e **hipóteses a validar** — quem testar, por favor
+confirme ou corrija.
 
-- O "NET" é um módulo Wi-Fi separado, plugado na placa base por um conector de
-  pinos (header). A serigrafia da placa traz `intelbras` e o código
-  `4114040/2`; o módulo tem LED (`D1`), botão (`S1`) e um ESP.
-- O ESP é um **Espressif ESP-WROOM-02D** (ESP8266, 2,4 GHz; marcação
-  `CCAP18LP0180T9`, FCC ID `2ACTZ-ESPWROOM02D`), sem secure boot nem
-  criptografia de flash — a flash SPI é legível/gravável por `esptool`.
-- Conclusão para quem pensar em firmware próprio: o ESP é só o transporte;
-  a lógica do eletrificador fica no microcontrolador da placa base, e o ESP
-  conversa com ele por serial num protocolo próprio da Intelbras, **diferente**
-  do que este documento descreve (que é o protocolo ESP↔nuvem↔app). Trocar o
-  firmware do ESP por Tasmota/ESPHome derruba a função de alarme até esse
-  protocolo serial ser mapeado. Ninguém o mapeou ainda; é o passo seguinte
-  natural para um controle 100% local sem a nuvem Intelbras.
+Observado (foto da placa):
+
+- Placa com serigrafia `intelbras` e código `4114040/2`, com LED `D1`, botão
+  `S1`, uma fileira de pinos (header) numa borda e um módulo Espressif
+  **ESP-WROOM-02D** (ESP8266, Wi-Fi 2,4 GHz; marcação `CCAP18LP0180T9`,
+  FCC ID `2ACTZ-ESPWROOM02D`).
+
+Hipóteses, **não testadas**:
+
+- Pela fileira de pinos, a placa parece ser um módulo separado plugado na
+  placa base do eletrificador ("NET" = este módulo). A validar abrindo o
+  painel e vendo como ela se conecta.
+- O ESP8266, em geral, não tem secure boot nem criptografia de flash, então
+  em tese a flash SPI do módulo é legível por `esptool` — o dump **não foi
+  feito**.
+- A lógica do eletrificador provavelmente fica num microcontrolador da placa
+  base, e o ESP faria só a ponte com a nuvem, falando com esse MCU por
+  serial num protocolo próprio — **diferente** do protocolo ESP↔nuvem↔app
+  descrito aqui. Se for assim, trocar o firmware do ESP (Tasmota/ESPHome)
+  derruba a função de alarme até esse protocolo ser mapeado, e mapeá-lo
+  (sniffando a serial entre módulo e placa base) seria o caminho para um
+  controle 100% local, sem a nuvem Intelbras. Não encontramos ninguém que
+  tenha feito isso.
 
 ---
 
@@ -162,18 +173,35 @@ Resposta de 165 bytes (offsets incluem os 4 bytes de prefixo do relay):
 ### 4.1 Variante sem checksum (164 bytes)
 
 Outro ELC 6012 NET (06/nov/2026; placa base **1.1.0**, módulo Wi-Fi **1.2.11**,
-como o app Guardian mostra em "Sobre") responde ao `0x0B4A` — e ao
-`0x401E`/`0x401F` — com **164 bytes**: o mesmo layout de `[0..163]`, **sem o byte
-de checksum**. O campo `len` vem igual (`0xA4` = 164), ou seja, nele o `len`
-já é o total. Diferenças observadas:
+como o app Guardian mostra em "Sobre") responde ao `0x0B4A` e ao `0x401E`
+(testado com `shock-on`/`shock-off`) com **164 bytes**, sem o byte de checksum.
+O campo `len` vem igual (`0xA4` = 164), ou seja, nele o `len` já é o total.
+`0x401F` (bypass) **não foi testado** nesse painel; o cliente assume o mesmo
+comportamento.
 
-- `[163]` traz o RSSI em complemento de dois (`0xD4 0xD3 0xD7 0xCE` = -44, -45,
-  -41, -50 dBm), em vez do módulo positivo (`0x3F` = 63 dBm) do painel original.
-  Lido sem tratamento dava sempre 0% — o próprio app Guardian mostra
-  "Sinal Wi-Fi 0%" nesse painel, ou seja, o app tem o mesmo problema. Logo
-  após o módulo reconectar ao Wi-Fi o app mostra "100%" por alguns segundos:
-  `[163]` vem `0` (RSSI ainda não medido, `<=37`) até a primeira medição.
-- `[152]` acompanha o dia do mês (`05`→`06` na virada), como `[72]`.
+Observado em 5 capturas (05–06/nov/2026):
+
+- Os campos validados no painel original coincidem: `[8]=0x35`, `[30]`/`[31]`
+  (choque/alarme — conferidos com `shock-on`/`shock-off`), `[46..47]`,
+  `[62..63]`, `[72..77]` (relógio, batendo com a hora real) e o MAC em
+  `[157..162]`. Os demais bytes vieram iguais aos do painel original ou zerados;
+  não foram validados individualmente.
+- Entre as capturas só variaram `[72]`, `[75..77]` (relógio), `[152]` e `[163]`.
+- `[163]` veio `D4 D3 D7 CE D2`. Nenhuma fórmula de checksum testada (XOR,
+  XOR^FF, soma, sobre o frame inteiro ou a partir de `[4]`/`[6]`/`[8]`) bate
+  com esses valores. Lidos como inteiro **com sinal** dão -44, -45, -41, -50,
+  -46 dBm — faixa típica de RSSI Wi-Fi a poucos metros do roteador. É a
+  interpretação adotada pelo cliente (`sig > 127 → 256 - sig`, depois o mesmo
+  mapeamento de %), **consistente mas não confirmada** por uma medição
+  independente do RSSI. No painel original `[163]` vem positivo (`0x3F` = 63).
+- Lido sem tratamento, `[163]` dava sempre 0% — e o **próprio app Guardian
+  mostra "Sinal Wi-Fi 0%"** nesse painel, o que sugere que o app também lê o
+  byte sem sinal. Logo após o módulo reconectar ao Wi-Fi o app mostrou "100%"
+  por alguns segundos e voltou a 0%; uma explicação possível é `[163]=0`
+  (RSSI ainda não medido, `<=37` → 100%) até a primeira medição — **esse frame
+  não foi capturado**.
+- `[152]` passou de `05` para `06` junto com `[72]` (dia do mês) na virada do
+  dia; com 2 amostras, parece acompanhar o dia, mas não está confirmado.
 
 Quem lê `len + 1` fica esperando o 165º byte até o timeout do comando (20 s no
 status, 15 s nos comandos) a cada consulta. O cliente agora lê `len` bytes e
@@ -181,9 +209,11 @@ espera o checksum só por `STATUS_TAIL_TIMEOUT` (1 s); sem ele, valida o frame
 pela estrutura (eco `0B4A`, modelo `0x35` em `[8]`, MAC da sessão em
 `[157..162]`). Com o 165º byte presente, o checksum continua obrigatório.
 
-Nesse painel, desarmado, uma zona **sem fio** aberta não altera `[46..47]`: o
-sensor avisa a abertura pelo rádio, mas o painel só a registra como disparo
-quando armado. A zona 1 (com fio) não foi testada.
+Zonas nesse painel: com o alarme **desarmado**, abrir uma janela com sensor
+sem fio (zona 2–8) **não altera `[46..47]`** (status lido com a janela aberta).
+Hipótese a validar: o painel só registra a abertura de zona sem fio como
+disparo com o alarme armado — o teste armado não foi feito (dispara a sirene).
+A zona 1 (com fio) não foi testada.
 
 ## 5. Arme / desarme (comando 0x401E)
 

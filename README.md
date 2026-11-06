@@ -134,9 +134,9 @@ dispositivo (ex.: `alarm_control_panel.elc_6012_net_cerca_eletrica`):
 - **`switch.choque`** — liga/desliga **só o choque** (o alarme não muda), como o
   botão de choque do app Guardian
 - **`binary_sensor.zona_1..8`** — zonas abertas (device_class `opening`; o ELC tem 8 zonas).
-  A zona 1 é com fio; as 2 a 8 são sem fio e, **com o alarme desarmado, o painel
-  não as reporta abertas** (o sensor avisa pelo rádio, o painel só registra como
-  disparo quando armado) — ver `PROTOCOLO` §4.1
+  A zona 1 é com fio; as 2 a 8 são sem fio e, num painel testado, **com o alarme
+  desarmado uma zona sem fio aberta não aparece aqui** (ver `PROTOCOLO` §4.1;
+  o comportamento com o alarme armado ainda não foi validado)
 - **`switch.bypass_zona_1..8`** — anula/reativa a zona (bypass). Só com o alarme
   desarmado: com ele armado o comando é recusado e o switch volta ao estado real
 - **`binary_sensor.disparo`** — qualquer zona disparada (o disparo do choque
@@ -373,5 +373,5 @@ ponte exigem o `paho-mqtt` (sem ele são pulados).
 | Tudo "unavailable" | ponte parada ou sem sessão (`binary_sensor.ponte_elc` OFF) | ver o log do add-on; após NACK 50 a ponte tenta de novo com backoff (até 10 min) |
 | App Guardian: "central desconectada" | a ponte está com a sessão | esperado — use o HA, ou pare a ponte |
 | `resposta de status inválida (164 B)` | firmware que responde sem checksum (placa 1.1.0 / módulo 1.2.11) | versão ≥ 1.1.4 aceita; antes disso cada consulta ainda esperava 20 s pelo byte que não vinha |
-| `sensor.sinal_elc` em 0% (e o Guardian também mostra "Sinal Wi-Fi 0%") | mesmo firmware: RSSI com sinal em `[163]` | corrigido na 1.1.4 (o app Guardian continua mostrando 0%) |
-| Janela/porta aberta não muda `binary_sensor.zona_N` | zona sem fio com o alarme desarmado | comportamento do painel; arme o alarme para a abertura virar `disparo` |
+| `sensor.sinal_elc` em 0% (e o Guardian também mostra "Sinal Wi-Fi 0%") | mesmo firmware: `[163]` interpretado como RSSI com sinal | tratado na 1.1.4 (o app Guardian continua mostrando 0%) |
+| Janela/porta aberta não muda `binary_sensor.zona_N` | zona sem fio com o alarme desarmado (observado num painel) | comportamento do painel, não do add-on; com o alarme armado a abertura deve virar `disparo` — ainda a validar |
