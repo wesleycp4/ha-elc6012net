@@ -585,9 +585,10 @@ def parse_fence_status(resp: bytes) -> dict:
       [54..55] bitmask de zonas disparadas
       [62..63] bitmask de zonas em bypass
       [72..77] dia, mês, ano, hora, min, seg (relógio do painel)
-      [163]    sinal: |RSSI| em dBm (<=37 -> 100%; senão 174-2*v). Alguns
-               firmwares mandam o RSSI com sinal (ex.: 0xD4 = -44 dBm) e sem o
-               checksum — o frame tem 164 bytes.
+      [163]    sinal: |RSSI| em dBm (<=37 -> 100%; senão 174-2*v). Em alguns
+               firmwares o frame tem 164 bytes (sem checksum) e [163] vem > 127;
+               é tratado como RSSI com sinal (0xD4 = -44 dBm) — interpretação
+               consistente com as capturas, ver PROTOCOLO §4.1.
       [164]    checksum (quando presente)
     """
     def bit(b: int, n: int) -> bool:
@@ -598,7 +599,7 @@ def parse_fence_status(resp: bytes) -> dict:
 
     sig = resp[163] if len(resp) > 163 else None
     if sig is not None and sig > 127:
-        sig = 256 - sig            # RSSI em complemento de dois: -44 dBm -> 44
+        sig = 256 - sig            # lido como RSSI com sinal: 0xD4 (-44 dBm) -> 44
     dt = None
     if len(resp) > 77 and 1 <= resp[72] <= 31 and 1 <= resp[73] <= 12:
         dt = {"dia": resp[72], "mes": resp[73], "ano": resp[74],
