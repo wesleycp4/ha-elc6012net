@@ -42,6 +42,26 @@ desconectada". Uma sessão aberta aguenta consultas periódicas indefinidamente
 (testado: 12 min, inclusive 120 s parada) com ~0,3 s por consulta. Ao fechar uma
 sessão, o relay pode levar alguns segundos para liberar o painel.
 
+### 1.2 Hardware do módulo de rede (painel de 06/nov/2026, §4.1)
+
+Informação de referência para quem quiser ir além do protocolo (sniffar a
+serial, trocar o firmware do módulo). Observado numa unidade com placa base
+**1.1.0** e módulo **1.2.11** (versões como o app Guardian mostra em "Sobre"):
+
+- O "NET" é um módulo Wi-Fi separado, plugado na placa base por um conector de
+  pinos (header). A serigrafia da placa traz `intelbras` e o código
+  `4114040/2`; o módulo tem LED (`D1`), botão (`S1`) e um ESP.
+- O ESP é um **Espressif ESP-WROOM-02D** (ESP8266, 2,4 GHz; marcação
+  `CCAP18LP0180T9`, FCC ID `2ACTZ-ESPWROOM02D`), sem secure boot nem
+  criptografia de flash — a flash SPI é legível/gravável por `esptool`.
+- Conclusão para quem pensar em firmware próprio: o ESP é só o transporte;
+  a lógica do eletrificador fica no microcontrolador da placa base, e o ESP
+  conversa com ele por serial num protocolo próprio da Intelbras, **diferente**
+  do que este documento descreve (que é o protocolo ESP↔nuvem↔app). Trocar o
+  firmware do ESP por Tasmota/ESPHome derruba a função de alarme até esse
+  protocolo serial ser mapeado. Ninguém o mapeou ainda; é o passo seguinte
+  natural para um controle 100% local sem a nuvem Intelbras.
+
 ---
 
 ## 2. Enquadramento
